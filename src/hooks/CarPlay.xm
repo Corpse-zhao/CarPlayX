@@ -255,7 +255,7 @@ void addCarplayDeclarationsToAppLibrary(id appLibrary)
 {
     if ([[CPXPreferences sharedInstance] masterEnabled])
     {
-        id appLibrary = objcInvoke(_self, @"library");
+        id appLibrary = objcInvoke(self, @"library");
         addCarplayDeclarationsToAppLibrary(appLibrary);
     }
     %orig;

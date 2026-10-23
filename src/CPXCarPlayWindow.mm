@@ -538,7 +538,7 @@ id getCarplayCADisplay(void)
     CGFloat xOrigin = [[self rootWindow] frame].origin.x;
 
     /* 车机屏永远是物理横屏，竖屏时特殊缩放 */
-    if (UIInterfaceOrientationIsPortrait(desiredOrientation))
+    if (UIInterfaceOrientationIsPortrait((UIInterfaceOrientation)desiredOrientation))
     {
         widthScale = (carplayDisplaySize.width / 2) / mainScreenSize.width;
         CGFloat scaledDisplayWidth = carplayDisplaySize.width * widthScale;
