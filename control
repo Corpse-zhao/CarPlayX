@@ -1,7 +1,7 @@
 Package: com.corpsezhao.carplayx
 Name: CarPlayX
 Depends: mobilesubstrate (>= 0.9.5000), firmware (>= 14.0), preferenceloader
-Version: 0.1.6
+Version: 0.1.7
 Description: CarPlay 增强：自定义壁纸 / 强制把任意 App 加入 CarPlay / 移除默认不可删除的 App
 Maintainer: Corpse-zhao
 Author: Corpse-zhao
