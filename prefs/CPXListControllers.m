@@ -231,7 +231,10 @@
         NSSortDescriptor *name = [[NSSortDescriptor alloc] initWithKey:@"name" ascending:YES];
         _appList = [appList sortedArrayUsingDescriptors:@[stock, name]];
         _mode = mode;
-        [self setTitle:((mode isEqualToString:@"add") ? @"加入 / 排除应用" : @"移除默认应用")];
+        if ([mode isEqualToString:@"add"])
+            [self setTitle:@"加入 / 排除应用"];
+        else
+            [self setTitle:@"移除默认应用"];
     }
     return self;
 }
