@@ -183,8 +183,8 @@ id getCarplayCADisplay(void)
     [[self rootWindow] addSubview:self.dockView];
 
     NSBundle *carplayBundle = [NSBundle bundleWithPath:@"/System/Library/CoreServices/CarPlay.app"];
-    UITraitCollection *carplayTrait = [UITraitCollection traitCollectionWithUserInterfaceIdiom:3];
-    UITraitCollection *interfaceStyleTrait = [UITraitCollection traitCollectionWithUserInterfaceStyle:1];
+    UITraitCollection *carplayTrait = [UITraitCollection traitCollectionWithUserInterfaceIdiom:(UIUserInterfaceIdiom)3];
+    UITraitCollection *interfaceStyleTrait = [UITraitCollection traitCollectionWithUserInterfaceStyle:(UIUserInterfaceStyle)1];
     UITraitCollection *traitCollection = [UITraitCollection traitCollectionWithTraitsFromCollections:@[carplayTrait, interfaceStyleTrait]];
 
     CGFloat buttonSize = 35;
@@ -225,7 +225,7 @@ id getCarplayCADisplay(void)
     {
         for (id snapshotCandidate in objcInvoke(snapshotGroup, @"snapshots"))
         {
-            int snapshotOrientation = objcInvokeT(snapshotCandidate, @"interfaceOrientation", int);
+            UIInterfaceOrientation snapshotOrientation = (UIInterfaceOrientation)objcInvokeT(snapshotCandidate, @"interfaceOrientation", int);
             int snapshotContentType = objcInvokeT(snapshotCandidate, @"contentType", int);
             if (UIInterfaceOrientationIsLandscape(snapshotOrientation))
             {
@@ -254,7 +254,7 @@ id getCarplayCADisplay(void)
         }
     }
 
-    self.shouldGenerateSnapshot = appSnapshot ? UIInterfaceOrientationIsPortrait(objcInvokeT(appSnapshot, @"interfaceOrientation", int)) : YES;
+    self.shouldGenerateSnapshot = appSnapshot ? UIInterfaceOrientationIsPortrait((UIInterfaceOrientation)objcInvokeT(appSnapshot, @"interfaceOrientation", int)) : YES;
 
     id appSnapshotImage = appSnapshot ? objcInvoke_1(appSnapshot, @"imageForInterfaceOrientation:", 1) : nil;
 
@@ -385,7 +385,7 @@ id getCarplayCADisplay(void)
 
 - (void)enterFullscreen
 {
-    if (UIInterfaceOrientationIsPortrait(self.orientation))
+    if (UIInterfaceOrientationIsPortrait((UIInterfaceOrientation)self.orientation))
     {
         return;
     }
@@ -484,7 +484,7 @@ id getCarplayCADisplay(void)
 /* 旋转按钮 */
 - (void)handleRotate
 {
-    int desiredOrientation = (UIInterfaceOrientationIsLandscape(self.orientation)) ? 1 : 3;
+    UIInterfaceOrientation desiredOrientation = (UIInterfaceOrientation)((UIInterfaceOrientationIsLandscape((UIInterfaceOrientation)self.orientation)) ? 1 : 3);
 
     id appScene = objcInvoke(objcInvoke([self appViewController], @"sceneHandle"), @"sceneIfExists");
     if (!appScene)
