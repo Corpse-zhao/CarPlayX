@@ -201,7 +201,7 @@ void CPXLog(NSString *fmt, ...)
                     [h seekToEndOfFile];
                     [h writeData:data];
                     [h closeFile];
-                    [h release];
+                    /* fileHandleForUpdatingAtPath 返回 autoreleased 对象，绝不能手动 release（过度释放 → pool pop 崩溃） */
                 }
                 else
                 {

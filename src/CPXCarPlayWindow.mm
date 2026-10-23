@@ -115,7 +115,7 @@ id getCarplayCADisplay(void)
             [self resizeAppViewForOrientation:_orientation fullscreen:_isFullscreen forceUpdate:YES];
         }];
         [_observers addObject:observer];
-        [observer release];
+        /* addObserverForName: 返回 autoreleased 对象，不可 release（参考项目同样不释放） */
 
         _screenTapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleScreenTapped)];
         id systemGestureManager = objcInvoke(objc_getClass("_UISystemGestureManager"), @"sharedInstance");
