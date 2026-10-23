@@ -422,13 +422,25 @@ int hook_BKSDisplayServicesSetScreenBlanked(int arg1)
 
         if ([[[NSBundle mainBundle] bundleIdentifier] isEqualToString:@"com.apple.springboard"])
         {
-            CPXLog(@"========== CarPlayX %@ 启动（SpringBoard 进程）==========", CPX_VERSION);
-            CPXDumpWallpaperClasses();
-            %init(SPRINGBOARD);
-            void *_BKSDisplayServicesSetScreenBlanked = dlsym(dlopen(NULL, 0), "BKSDisplayServicesSetScreenBlanked");
-            if (_BKSDisplayServicesSetScreenBlanked)
+            if (CPX_DISABLED)
             {
-                MSHookFunction(_BKSDisplayServicesSetScreenBlanked, (void *)hook_BKSDisplayServicesSetScreenBlanked, (void **)&orig_BKSDisplayServicesSetScreenBlanked);
+                return;
+            }
+            @try
+            {
+                CPXLog(@"========== CarPlayX %@ 启动（SpringBoard 进程）==========", CPX_VERSION);
+                CPXDumpWallpaperClasses();
+                %init(SPRINGBOARD);
+                void *_BKSDisplayServicesSetScreenBlanked = dlsym(dlopen(NULL, 0), "BKSDisplayServicesSetScreenBlanked");
+                if (_BKSDisplayServicesSetScreenBlanked)
+                {
+                    MSHookFunction(_BKSDisplayServicesSetScreenBlanked, (void *)hook_BKSDisplayServicesSetScreenBlanked, (void **)&orig_BKSDisplayServicesSetScreenBlanked);
+                }
+                CPXLog(@"[启动] SpringBoard 侧钩子全部挂载完成");
+            }
+            @catch (NSException *e)
+            {
+                CPXLog(@"[启动] SpringBoard 侧初始化异常（已忽略）: %@", e);
             }
         }
     }

@@ -8,7 +8,7 @@
 #include <dlfcn.h>
 #include "CPXPreferences.h"
 
-#define CPX_VERSION @"0.1.0"
+#define CPX_VERSION @"0.1.1"
 
 #define BAIL_IF_UNSUPPORTED_IOS { \
     if ([[[UIDevice currentDevice] systemVersion] compare:@"14.0" options:NSNumericSearch] == NSOrderedAscending) \
@@ -59,6 +59,10 @@ static char *kPropertyKey_didDrawPlaceholder;
 
 #define CPX_WALLPAPER_DIR @"/var/mobile/Documents/CarPlayX"
 #define CPX_WALLPAPER_BASENAME @"wallpaper"
+
+/* 保险丝：创建此文件即整体禁用插件（崩溃急救用，无需卸载） */
+#define CPX_DISABLE_PATH @"/var/mobile/Documents/CarPlayX/DISABLED"
+#define CPX_DISABLED ([[NSFileManager defaultManager] fileExistsAtPath:CPX_DISABLE_PATH])
 
 #define CARPLAY_DOCK_WIDTH 40
 

@@ -437,9 +437,21 @@ static BOOL CPXShouldReplaceImageName(NSString *name)
 
         if ([[[NSBundle mainBundle] bundleIdentifier] isEqualToString:@"com.apple.CarPlayApp"])
         {
-            CPXLog(@"========== CarPlayX %@ 启动（CarPlay 进程）==========", CPX_VERSION);
-            CPXDumpWallpaperClasses();
-            %init(CARPLAY);
+            if (CPX_DISABLED)
+            {
+                return;
+            }
+            @try
+            {
+                CPXLog(@"========== CarPlayX %@ 启动（CarPlay 进程）==========", CPX_VERSION);
+                CPXDumpWallpaperClasses();
+                %init(CARPLAY);
+                CPXLog(@"[启动] CarPlay 侧钩子全部挂载完成");
+            }
+            @catch (NSException *e)
+            {
+                CPXLog(@"[启动] CarPlay 侧初始化异常（已忽略）: %@", e);
+            }
         }
     }
 }

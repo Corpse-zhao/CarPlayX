@@ -25,23 +25,29 @@
 
 - (void)reloadPreferences
 {
+    /* MRC 注意：必须持有，绝不能把 autoreleased 字面量直接赋给 ivar（会导致僵尸对象崩溃） */
+    NSDictionary *newPrefs = [[NSDictionary alloc] init];
     if ([[NSFileManager defaultManager] fileExistsAtPath:PREFERENCES_PLIST_PATH])
     {
-        _cachedPreferences = [[NSDictionary alloc] initWithContentsOfFile:PREFERENCES_PLIST_PATH];
+        NSDictionary *loaded = [[NSDictionary alloc] initWithContentsOfFile:PREFERENCES_PLIST_PATH];
+        if (loaded)
+        {
+            [newPrefs release];
+            newPrefs = loaded;
+        }
     }
-    else
-    {
-        _cachedPreferences = @{};
-    }
+    [_cachedPreferences release];
+    _cachedPreferences = newPrefs;
 }
 
 - (void)updateValue:(id)value forPreferenceKey:(NSString *)key
 {
     NSMutableDictionary *copy = [_cachedPreferences mutableCopy];
     copy[key] = value;
-    _cachedPreferences = copy;
-    [copy writeToFile:PREFERENCES_PLIST_PATH atomically:YES];
+    /* 走 retain setter 持有新字典，再平衡 mutableCopy 的 +1，避免 ivar 指向已释放对象 */
+    [self setCachedPreferences:copy];
     [copy release];
+    [copy writeToFile:PREFERENCES_PLIST_PATH atomically:YES];
 }
 
 - (BOOL)masterEnabled
