@@ -4,6 +4,12 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
+/* iOS SDK 头文件不公开 NSDistributedNotificationCenter，这里自行声明 */
+@interface NSDistributedNotificationCenter : NSNotificationCenter
++ (instancetype)defaultCenter;
+- (void)postNotificationName:(NSString *)name object:(id)object userInfo:(NSDictionary *)userInfo deliverImmediately:(BOOL)deliverImmediately;
+@end
+
 #define CPX_VERSION @"0.1.0"
 
 #define PREFERENCES_PLIST_PATH @"/var/mobile/Library/Preferences/com.carplayx.preferences.plist"

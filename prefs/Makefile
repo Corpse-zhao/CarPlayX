@@ -8,7 +8,7 @@ BUNDLE_NAME = carplayxprefs
 carplayxprefs_FILES = CPXPrefsCommon.m CPXListControllers.m
 carplayxprefs_INSTALL_PATH = /Library/PreferenceBundles
 carplayxprefs_FRAMEWORKS = UIKit Foundation PhotosUI
-carplayxprefs_CFLAGS = -fobjc-arc
+carplayxprefs_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-arc-retain-cycles
 carplayxprefs_RESOURCE_DIRS = Resources
 
 include $(THEOS_MAKE_PATH)/bundle.mk

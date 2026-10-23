@@ -231,7 +231,7 @@
         NSSortDescriptor *name = [[NSSortDescriptor alloc] initWithKey:@"name" ascending:YES];
         _appList = [appList sortedArrayUsingDescriptors:@[stock, name]];
         _mode = mode;
-        [self setTitle:(mode isEqualToString:@"add") ? @"加入 / 排除应用" : @"移除默认应用"];
+        [self setTitle:((mode isEqualToString:@"add") ? @"加入 / 排除应用" : @"移除默认应用")];
     }
     return self;
 }
@@ -292,7 +292,7 @@
         cell.accessoryType = [self appIsIncludedInAddMode:app] ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
         /* 系统自带 app 在"加入"页里置灰（默认不加入也不建议加） */
         cell.textLabel.enabled = ![app[@"isStock"] boolValue];
-        cell.imageView.enabled = cell.textLabel.enabled;
+        cell.imageView.alpha = cell.textLabel.enabled ? 1.0 : 0.35;
     }
     else
     {
