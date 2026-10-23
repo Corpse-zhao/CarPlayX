@@ -56,7 +56,8 @@
     {
         return [[_cachedPreferences valueForKey:@"masterEnabled"] boolValue];
     }
-    return YES;
+    /* 默认关：首次安装保持完全被动，用户在设置面板手动开启 */
+    return NO;
 }
 
 - (NSArray *)excludedApplications

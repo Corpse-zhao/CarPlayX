@@ -78,7 +78,7 @@
         {
             cell.textLabel.text = @"启用 CarPlayX";
             id v = [CPXPrefsStore valueForKey:@"masterEnabled"];
-            sw.on = v ? [v boolValue] : YES;
+            sw.on = v ? [v boolValue] : NO;
             [sw addTarget:self action:@selector(masterSwitchChanged:) forControlEvents:UIControlEventValueChanged];
         }
         else if (indexPath.section == 0 && indexPath.row == 1)

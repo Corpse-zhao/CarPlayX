@@ -84,13 +84,17 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
 - (void)applicationDidFinishLaunching:(id)arg1
 {
     LOG_LIFECYCLE_EVENT;
-    [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] addObserver:self selector:NSSelectorFromString(@"handleCarPlayLaunchNotification:") name:CPX_NOTIFICATION_LAUNCH object:nil];
 
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(carplayIsConnectedChanged) name:@"CarPlayIsConnectedDidChange" object:nil];
+    if ([[CPXPreferences sharedInstance] masterEnabled])
+    {
+        [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] addObserver:self selector:NSSelectorFromString(@"handleCarPlayLaunchNotification:") name:CPX_NOTIFICATION_LAUNCH object:nil];
 
-    NSMutableArray *appIdentifiersToIgnoreLockAssertions = [[NSMutableArray alloc] init];
-    objc_setAssociatedObject(self, &kPropertyKey_lockAssertionIdentifiers, appIdentifiersToIgnoreLockAssertions, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [appIdentifiersToIgnoreLockAssertions release];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(carplayIsConnectedChanged) name:@"CarPlayIsConnectedDidChange" object:nil];
+
+        NSMutableArray *appIdentifiersToIgnoreLockAssertions = [[NSMutableArray alloc] init];
+        objc_setAssociatedObject(self, &kPropertyKey_lockAssertionIdentifiers, appIdentifiersToIgnoreLockAssertions, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [appIdentifiersToIgnoreLockAssertions release];
+    }
 
     %orig;
 
@@ -177,6 +181,11 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
 /* CarPlay 托管窗口的横竖屏变换，face-up/face-down 会抛异常，强制落到 landscape */
 - (void)_updateReferenceSize:(struct CGSize)arg1 andOrientation:(long long)arg2
 {
+    if (![[CPXPreferences sharedInstance] masterEnabled])
+    {
+        %orig;
+        return;
+    }
     if (arg2 > 4)
     {
         return %orig(arg1, 3);
@@ -215,6 +224,11 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
 /* App 切换器跟随设备物理方向（而不是 CarPlay 上 app 的方向） */
 - (void)_updateContentViewInterfaceOrientation:(int)arg1
 {
+    if (![[CPXPreferences sharedInstance] masterEnabled])
+    {
+        %orig;
+        return;
+    }
     if (objcInvoke([UIApplication sharedApplication], @"liveCarplayWindow") != nil)
     {
         int deviceOrientation = [[UIDevice currentDevice] orientation];
@@ -250,6 +264,10 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
 - (void)layoutSubviews
 {
     %orig;
+    if (![[CPXPreferences sharedInstance] masterEnabled])
+    {
+        return;
+    }
     @try
     {
         BOOL isCarplayCounterpart = objcInvokeT(self, @"isMainScreenCounterpartToLiveCarplayApp", BOOL);
@@ -347,6 +365,11 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
 
 - (void)setDisplayMode:(int)arg1 animationFactory:(id)arg2 completion:(void *)arg3
 {
+    if (![[CPXPreferences sharedInstance] masterEnabled])
+    {
+        %orig;
+        return;
+    }
     BOOL isCarplayCounterpart = objcInvokeT(self, @"isMainScreenCounterpartToLiveCarplayApp", BOOL);
     BOOL requestingLiveContent = arg1 == 4;
     if (requestingLiveContent && isCarplayCounterpart)
@@ -387,6 +410,10 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
 /* 主屏息屏时，若 CarPlay 上有托管 app，恢复渲染（不点亮屏幕） */
 int hook_BKSDisplayServicesSetScreenBlanked(int arg1)
 {
+    if (![[CPXPreferences sharedInstance] masterEnabled])
+    {
+        return orig_BKSDisplayServicesSetScreenBlanked(arg1);
+    }
     id liveCarplayWindow = objcInvoke([UIApplication sharedApplication], @"liveCarplayWindow");
     if (arg1 == 1 && liveCarplayWindow != nil)
     {
