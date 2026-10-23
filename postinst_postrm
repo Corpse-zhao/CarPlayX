@@ -1,0 +1,5 @@
+#!/bin/sh
+# 安装/卸载后重启 CarPlay 与 SpringBoard，让插件立即生效
+killall -9 CarPlay 2>/dev/null || true
+killall -9 SpringBoard 2>/dev/null || true
+exit 0

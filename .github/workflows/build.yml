@@ -1,0 +1,130 @@
+name: Build CarPlayX
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Theos (roothide branch)
+        run: |
+          brew install make xz ldid
+          git clone --recursive https://github.com/roothide/theos.git $HOME/theos
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git $HOME/sdks-tmp
+          cd $HOME/sdks-tmp && git sparse-checkout set iPhoneOS14.5.sdk
+          mv iPhoneOS14.5.sdk $HOME/theos/sdks/
+          rm -rf $HOME/sdks-tmp
+          ls $HOME/theos/sdks/
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      - name: Preflight
+        run: |
+          FAIL=0
+          # Logos 危险钩子检查
+          grep -nE '^%hook[[:space:]]+NSObject[[:space:]]*$' src/hooks/*.xm && FAIL=1
+          grep -nE '^%hook[[:space:]]+\$' src/hooks/*.xm && FAIL=1
+          # %hook / %end 配平
+          for f in src/hooks/*.xm; do
+            H=$(grep -c '^%hook' "$f"); E=$(grep -c '^%end' "$f")
+            echo "$f: %hook=$H %end=$E"
+            [ "$H" -ne "$E" ] && { echo "❌ $f hook/end 不配平"; FAIL=1; }
+          done
+          # control 换行符检查（CRLF 会让打包失败）
+          file control | grep -q CRLF && { echo "❌ control 是 CRLF"; FAIL=1; }
+          # postinst 权限位（git 索引里必须是 100755）
+          MODE=$(git ls-files -s postinst_postrm | awk '{print $1}')
+          echo "postinst_postrm git mode = $MODE"
+          [ "$MODE" != "100755" ] && { echo "❌ postinst_postrm 在 git 索引里不是 755"; FAIL=1; }
+          [ "$FAIL" -ne 0 ] && { echo "🛑 Preflight 未通过"; exit 1; }
+
+      - name: Fix maintainer script permissions
+        run: |
+          chmod 0755 postinst_postrm || true
+
+      - name: Build package
+        run: gmake package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1
+
+      - name: Inspect package
+        run: |
+          ls -la packages/
+          python3 - <<'PY'
+          import glob, io, os, tarfile
+          for path in sorted(glob.glob("packages/*.deb")):
+              print("==== %s (%d bytes) ====" % (path, os.path.getsize(path)))
+              raw = open(path, "rb").read()
+              off, control_tar, data_tar = 8, None, None
+              while off < len(raw):
+                  hdr = raw[off:off+60]
+                  if len(hdr) < 60: break
+                  name = hdr[0:16].decode().strip()
+                  size = int(hdr[48:58].decode().strip())
+                  off += 60
+                  body = raw[off:off+size]; off += size + (size % 2)
+                  if name.startswith("control.tar"): control_tar = body
+                  if name.startswith("data.tar"): data_tar = body
+              for label, blob in (("control", control_tar), ("data", data_tar)):
+                  if not blob: continue
+                  mode = "r:gz"
+                  try:
+                      with tarfile.open(fileobj=io.BytesIO(blob)) as tf:
+                          if label == "control":
+                              m = tf.extractfile("./control")
+                              print(m.read().decode() if m else "(no control)")
+                          else:
+                              for n in sorted(tf.getnames()):
+                                  if not n.endswith("/"): print("   ", n)
+                  except Exception as e:
+                      print("  parse error:", e)
+          PY
+
+      - name: Verify arm64e slice
+        run: |
+          python3 - <<'PY'
+          import glob, struct, subprocess, os
+          debs = glob.glob("packages/*.deb")
+          assert debs, "no deb produced"
+          path = debs[0]
+          raw = open(path, "rb").read()
+          off, data_tar = 8, None
+          while off < len(raw):
+              hdr = raw[off:off+60]
+              if len(hdr) < 60: break
+              name = hdr[0:16].decode().strip()
+              size = int(hdr[48:58].decode().strip())
+              off += 60
+              body = raw[off:off+size]; off += size + (size % 2)
+              if name.startswith("data.tar"): data_tar = body
+          import io, tarfile
+          found_dylib = False
+          with tarfile.open(fileobj=io.BytesIO(data_tar)) as tf:
+              for n in tf.getnames():
+                  if n.endswith("carplayx.dylib") or n.endswith("carplayxprefs"):
+                      blob = tf.extractfile(n).read()
+                      found_dylib = True
+                      slices = []
+                      if blob[:4] in (b"\xca\xfe\xba\xbe", b"\xca\xfe\xba\xbf"):
+                          cnt = struct.unpack(">I", blob[4:8])[0]
+                          o = 8
+                          for _ in range(cnt):
+                              ct, cs, off2, sz2, al = struct.unpack(">IIIII", blob[o:o+20]); o += 20
+                              slices.append((ct, cs & 0x00FFFFFF))
+                      else:
+                          ct, cs = struct.unpack("<ii", blob[4:12])
+                          slices.append((ct & 0xffffffff, cs & 0xffffffff))
+                      print(n, "->", slices)
+                      assert any(ct == 0x0100000C and cs == 2 for ct, cs in slices), "arm64e slice missing!"
+          assert found_dylib, "dylib not found in payload"
+          print("✅ arm64e slice OK")
+          PY
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: carplayx-deb
+          path: packages/*.deb
