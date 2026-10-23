@@ -12,6 +12,8 @@
     @protected
     NSArray *_specifiers;   /* 必须声明在基类接口里：PSListController 数据源直接访问自己的 ivar */
 }
+- (id)initForContentSize:(CGSize)size;
+- (id)initWithSpecifier:(PSSpecifier *)specifier;
 - (NSArray *)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
 - (void)reloadSpecifiers;
 @end

@@ -3,23 +3,57 @@
 
 @implementation CPXRootListController
 
-- (id)initForContentSize:(CGSize)size
+/* 兼容 Preferences 的多种实例化路径：init / initForContentSize: / initWithSpecifier: */
+- (instancetype)init
 {
     if ((self = [super init]))
     {
+        [self cpxCommonInit];
+    }
+    return self;
+}
+
+- (id)initForContentSize:(CGSize)size
+{
+    /* 必须走父类的 initForContentSize:（真实 PSListController 的设计初始化器），跳过会缺内部状态 */
+    if ((self = [super initForContentSize:size]))
+    {
+        [self cpxCommonInit];
+    }
+    return self;
+}
+
+- (id)initWithSpecifier:(PSSpecifier *)specifier
+{
+    if ((self = [super initWithSpecifier:specifier]))
+    {
+        [self cpxCommonInit];
+    }
+    return self;
+}
+
+- (void)cpxCommonInit
+{
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
         [self setTitle:@"CarPlayX"];
-
-        _rootTable = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleInsetGrouped];
-        _rootTable.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        _rootTable.delegate = self;
-        _rootTable.dataSource = self;
-        [self.view addSubview:_rootTable];
-
         /* 预取 app 清单（SpringBoard 通过分布式通知回传） */
         [self requestAppList];
-    }
+    });
+}
 
-    return self;
+- (void)loadView
+{
+    /* 自绘 UI：完全接管 loadView，不依赖父类的 specifier 机制 */
+    UIView *content = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    self.view = content;
+
+    UITableView *table = [[UITableView alloc] initWithFrame:content.bounds style:UITableViewStyleInsetGrouped];
+    table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    table.delegate = self;
+    table.dataSource = self;
+    [content addSubview:table];
+    self.rootTable = table;
 }
 
 - (void)requestAppList
