@@ -8,7 +8,7 @@
 #include <dlfcn.h>
 #include "CPXPreferences.h"
 
-#define CPX_VERSION @"0.1.2"
+#define CPX_VERSION @"0.1.3"
 
 #define BAIL_IF_UNSUPPORTED_IOS { \
     if ([[[UIDevice currentDevice] systemVersion] compare:@"14.0" options:NSNumericSearch] == NSOrderedAscending) \
@@ -63,6 +63,10 @@ static char *kPropertyKey_didDrawPlaceholder;
 /* 保险丝：创建此文件即整体禁用插件（崩溃急救用，无需卸载） */
 #define CPX_DISABLE_PATH @"/var/mobile/Documents/CarPlayX/DISABLED"
 #define CPX_DISABLED ([[NSFileManager defaultManager] fileExistsAtPath:CPX_DISABLE_PATH])
+
+/* 金丝雀分级：读取 /var/mobile/Documents/CarPlayX/STAGE 文件里的数字（缺省 0）
+   0=ctor 只写日志  1=+壁纸类清点  2=+%init 钩子挂载  3=+MSHookFunction */
+int CPXStage(void);
 
 #define CARPLAY_DOCK_WIDTH 40
 

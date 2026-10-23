@@ -150,6 +150,21 @@
 
 /* ============ 诊断日志 ============ */
 
+int CPXStage(void)
+{
+    @try
+    {
+        NSString *s = [NSString stringWithContentsOfFile:@"/var/mobile/Documents/CarPlayX/STAGE"
+                                                encoding:NSUTF8StringEncoding error:NULL];
+        if (!s) return 0;
+        return [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].intValue;
+    }
+    @catch (NSException *e)
+    {
+        return 0;
+    }
+}
+
 #define CPX_PROBE_PATH @"/var/mobile/Documents/CarPlayX/probe.txt"
 #define CPX_PROBE_MAX_BYTES (512 * 1024)
 

@@ -455,15 +455,25 @@ int hook_BKSDisplayServicesSetScreenBlanked(int arg1)
             }
             @try
             {
-                CPXLog(@"========== CarPlayX %@ 启动（SpringBoard 进程）==========", CPX_VERSION);
-                CPXDumpWallpaperClasses();
-                %init(SPRINGBOARD);
-                void *_BKSDisplayServicesSetScreenBlanked = dlsym(dlopen(NULL, 0), "BKSDisplayServicesSetScreenBlanked");
-                if (_BKSDisplayServicesSetScreenBlanked)
+                int stage = CPXStage();
+                CPXLog(@"========== CarPlayX %@ 启动（SpringBoard 进程, stage=%d）==========", CPX_VERSION, stage);
+                if (stage >= 1)
                 {
-                    MSHookFunction(_BKSDisplayServicesSetScreenBlanked, (void *)hook_BKSDisplayServicesSetScreenBlanked, (void **)&orig_BKSDisplayServicesSetScreenBlanked);
+                    CPXDumpWallpaperClasses();
                 }
-                CPXLog(@"[启动] SpringBoard 侧钩子全部挂载完成");
+                if (stage >= 2)
+                {
+                    %init(SPRINGBOARD);
+                }
+                if (stage >= 3)
+                {
+                    void *_BKSDisplayServicesSetScreenBlanked = dlsym(dlopen(NULL, 0), "BKSDisplayServicesSetScreenBlanked");
+                    if (_BKSDisplayServicesSetScreenBlanked)
+                    {
+                        MSHookFunction(_BKSDisplayServicesSetScreenBlanked, (void *)hook_BKSDisplayServicesSetScreenBlanked, (void **)&orig_BKSDisplayServicesSetScreenBlanked);
+                    }
+                }
+                CPXLog(@"[启动] SpringBoard ctor 走完 (stage=%d)", stage);
             }
             @catch (NSException *e)
             {

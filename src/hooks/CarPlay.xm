@@ -443,10 +443,17 @@ static BOOL CPXShouldReplaceImageName(NSString *name)
             }
             @try
             {
-                CPXLog(@"========== CarPlayX %@ 启动（CarPlay 进程）==========", CPX_VERSION);
-                CPXDumpWallpaperClasses();
-                %init(CARPLAY);
-                CPXLog(@"[启动] CarPlay 侧钩子全部挂载完成");
+                int stage = CPXStage();
+                CPXLog(@"========== CarPlayX %@ 启动（CarPlay 进程, stage=%d）==========", CPX_VERSION, stage);
+                if (stage >= 1)
+                {
+                    CPXDumpWallpaperClasses();
+                }
+                if (stage >= 2)
+                {
+                    %init(CARPLAY);
+                }
+                CPXLog(@"[启动] CarPlay ctor 走完 (stage=%d)", stage);
             }
             @catch (NSException *e)
             {
