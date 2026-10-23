@@ -267,7 +267,7 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
             UIView *backgroundView = objcInvoke(self, @"backgroundView");
             int deviceOrientation = [[UIDevice currentDevice] orientation];
             BOOL bgIsLandscape = [backgroundView frame].size.width > [backgroundView frame].size.height;
-            BOOL deviceIsLandscape = UIInterfaceOrientationIsLandscape(deviceOrientation);
+            BOOL deviceIsLandscape = UIInterfaceOrientationIsLandscape((UIInterfaceOrientation)deviceOrientation);
             if (bgIsLandscape == deviceIsLandscape)
             {
                 objcInvoke(self, @"drawCarplayPlaceholder");
@@ -370,7 +370,7 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
     CGFloat height = [self bounds].size.height;
 
     CGRect bounds = CGRectZero;
-    if (UIInterfaceOrientationIsLandscape(orientation))
+    if (UIInterfaceOrientationIsLandscape((UIInterfaceOrientation)orientation))
     {
         bounds.size = CGSizeMake(MAX(width, height), MIN(width, height));
     }
