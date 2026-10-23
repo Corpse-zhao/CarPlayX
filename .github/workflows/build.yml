@@ -29,10 +29,10 @@ jobs:
           # Logos 危险钩子检查
           grep -nE '^%hook[[:space:]]+NSObject[[:space:]]*$' src/hooks/*.xm && FAIL=1
           grep -nE '^%hook[[:space:]]+\$' src/hooks/*.xm && FAIL=1
-          # %hook / %end 配平
+          # %hook + %group / %end 配平（每个 %hook 和 %group 都需要一个 %end）
           for f in src/hooks/*.xm; do
-            H=$(grep -c '^%hook' "$f"); E=$(grep -c '^%end' "$f")
-            echo "$f: %hook=$H %end=$E"
+            H=$(grep -cE '^%(hook|group)' "$f"); E=$(grep -c '^%end' "$f")
+            echo "$f: %hook+group=$H %end=$E"
             [ "$H" -ne "$E" ] && { echo "❌ $f hook/end 不配平"; FAIL=1; }
           done
           # control 换行符检查（CRLF 会让打包失败）
