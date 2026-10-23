@@ -42,6 +42,8 @@ jobs:
           echo "postinst_postrm git mode = $MODE"
           [ "$MODE" != "100755" ] && { echo "❌ postinst_postrm 在 git 索引里不是 755"; FAIL=1; }
           [ "$FAIL" -ne 0 ] && { echo "🛑 Preflight 未通过"; exit 1; }
+          echo "✅ Preflight 通过"
+          exit 0
 
       - name: Fix maintainer script permissions
         run: |
