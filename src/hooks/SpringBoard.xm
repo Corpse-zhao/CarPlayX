@@ -472,7 +472,7 @@ int hook_BKSDisplayServicesSetScreenBlanked(int arg1)
                 }
                 else if (stage >= 2)
                 {
-                    [@"" writeToFile:CPX_BOOTFLAG_PATH atomically:YES];
+                    [[NSData data] writeToFile:CPX_BOOTFLAG_PATH atomically:YES];
                 }
 
                 CPXLog(@"========== CarPlayX %@ 启动（SpringBoard 进程, stage=%d）==========", CPX_VERSION, stage);
