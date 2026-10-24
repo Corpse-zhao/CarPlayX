@@ -3,6 +3,7 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
 /* iOS SDK 头文件不公开 NSDistributedNotificationCenter，这里自行声明 */
 @interface NSDistributedNotificationCenter : NSNotificationCenter
