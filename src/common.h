@@ -57,7 +57,10 @@ static char *kPropertyKey_didDrawPlaceholder;
 #define kPrefsAppLibraryChanged @"appLibrary"
 #define kPrefsWallpaperChanged @"wallpaper"
 
-/* iOS SDK 的 NSDistributedNotificationCenter 头文件只声明了部分方法，deliverImmediately: 变体需自声明 */
+/* iOS SDK 头文件完全没有 NSDistributedNotificationCenter 的声明，需整体自声明
+   （deliverImmediately: 变体只存在于 macOS 头文件，运行时实际可用） */
+@interface NSDistributedNotificationCenter : NSNotificationCenter
+@end
 @interface NSDistributedNotificationCenter (CPXDeliver)
 - (void)postNotificationName:(NSString *)name object:(id)obj userInfo:(NSDictionary *)userInfo deliverImmediately:(BOOL)deliverImmediately;
 @end
