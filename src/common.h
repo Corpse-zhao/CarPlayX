@@ -57,6 +57,11 @@ static char *kPropertyKey_didDrawPlaceholder;
 #define kPrefsAppLibraryChanged @"appLibrary"
 #define kPrefsWallpaperChanged @"wallpaper"
 
+/* iOS SDK 的 NSDistributedNotificationCenter 头文件只声明了部分方法，deliverImmediately: 变体需自声明 */
+@interface NSDistributedNotificationCenter (CPXDeliver)
+- (void)postNotificationName:(NSString *)name object:(id)obj userInfo:(NSDictionary *)userInfo deliverImmediately:(BOOL)deliverImmediately;
+@end
+
 #define CPX_WALLPAPER_DIR @"/var/mobile/Documents/CarPlayX"
 #define CPX_WALLPAPER_BASENAME @"wallpaper"
 
