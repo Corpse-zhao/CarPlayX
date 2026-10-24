@@ -8,7 +8,7 @@
 #include <dlfcn.h>
 #include "CPXPreferences.h"
 
-#define CPX_VERSION @"0.2.1"
+#define CPX_VERSION @"0.2.2"
 
 #define BAIL_IF_UNSUPPORTED_IOS { \
     if ([[[UIDevice currentDevice] systemVersion] compare:@"14.0" options:NSNumericSearch] == NSOrderedAscending) \
@@ -69,9 +69,12 @@ static char *kPropertyKey_didDrawPlaceholder;
 #define CPX_WALLPAPER_DIR @"/var/mobile/Documents/CarPlayX"
 #define CPX_WALLPAPER_BASENAME @"wallpaper"
 
-/* 保险丝：创建此文件即整体禁用插件（崩溃急救用，无需卸载） */
+/* 保险丝：创建此文件即整体禁用插件（崩溃急救用，无需卸载）
+   BOOTING：启动看门狗标记——挂载钩子前写入，正常启动 15 秒后自动删除；
+   若残留说明上次 SpringBoard 没起来，本次启动自动降级为被动模式（防无限 bootloop） */
 #define CPX_DISABLE_PATH @"/var/mobile/Documents/CarPlayX/DISABLED"
 #define CPX_DISABLED ([[NSFileManager defaultManager] fileExistsAtPath:CPX_DISABLE_PATH])
+#define CPX_BOOTFLAG_PATH @"/var/mobile/Documents/CarPlayX/BOOTING"
 
 /* 金丝雀分级（调试降级开关）：读取 /var/mobile/Documents/CarPlayX/STAGE_DEBUG 里的数字（缺省 3=全开）
    0=ctor 只写日志  1=+壁纸类清点  2=+%init 钩子挂载  3=+MSHookFunction

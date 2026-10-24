@@ -2,5 +2,8 @@
 # CarPlayX 安装/卸载后处理
 # 不自动注销 SpringBoard（用户手动注销）；尝试刷新桌面图标缓存（新装/卸载的 App 图标）
 echo "板栗仁CarPlay: 安装完成。桌面应出现「板栗仁CarPlay」图标；若没有，请注销一次刷新。"
+# 新版本是受信任的：清除旧版本遗留的保险丝/看门狗标记，让插件恢复工作
+rm -f /var/mobile/Documents/CarPlayX/DISABLED 2>/dev/null
+rm -f /var/mobile/Documents/CarPlayX/BOOTING 2>/dev/null
 uicache -p /Applications/CarPlayX.app >/dev/null 2>&1 || true
 exit 0

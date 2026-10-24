@@ -90,6 +90,13 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(carplayIsConnectedChanged) name:@"CarPlayIsConnectedDidChange" object:nil];
 
+    /* 启动看门狗：进入桌面 15 秒后清掉 BOOTING 标记（ctor 写入）。
+       若 15 秒内没走到这里，说明启动挂了，下次 ctor 检测到标记残留会自动降级被动模式 */
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [[NSFileManager defaultManager] removeItemAtPath:CPX_BOOTFLAG_PATH error:NULL];
+        CPXLog(@"[启动] 启动看门狗：启动确认，BOOTING 标记已清除");
+    });
+
     NSMutableArray *appIdentifiersToIgnoreLockAssertions = [[NSMutableArray alloc] init];
     objc_setAssociatedObject(self, &kPropertyKey_lockAssertionIdentifiers, appIdentifiersToIgnoreLockAssertions, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [appIdentifiersToIgnoreLockAssertions release];
@@ -456,6 +463,18 @@ int hook_BKSDisplayServicesSetScreenBlanked(int arg1)
             @try
             {
                 int stage = CPXStage();
+
+                /* 启动看门狗：上次启动若没走到"启动确认"（BOOTING 残留），本次强制被动模式 */
+                if ([[NSFileManager defaultManager] fileExistsAtPath:CPX_BOOTFLAG_PATH])
+                {
+                    CPXLog(@"[启动] 检测到 BOOTING 标记残留（上次启动未完成），本次降级为被动模式 stage=1");
+                    stage = 1;
+                }
+                else if (stage >= 2)
+                {
+                    [@"" writeToFile:CPX_BOOTFLAG_PATH atomically:YES];
+                }
+
                 CPXLog(@"========== CarPlayX %@ 启动（SpringBoard 进程, stage=%d）==========", CPX_VERSION, stage);
                 if (stage >= 1)
                 {
