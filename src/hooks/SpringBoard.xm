@@ -97,8 +97,8 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
     %orig;
 
     /* 设置面板请求 app 清单：全量返回（含系统 app，供"移除默认应用"用），带图标 */
+    /* 注意：队列由通知中心持有（MRC 下这里绝不能 release，v0.1.x 曾在注册前 release 造成悬垂指针） */
     NSOperationQueue *notificationQueue = [[NSOperationQueue alloc] init];
-    [notificationQueue release];
     [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] addObserverForName:CPX_NOTIFICATION_APP_DATA object:kPrefsAppDataRequesting queue:notificationQueue usingBlock:^(NSNotification *note) {
         @autoreleasepool
         {
@@ -148,7 +148,7 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
             NSDictionary *replyDict = [NSDictionary dictionaryWithObject:appList forKey:@"appList"];
             /* 同步落盘一份，供设置面板直接读取（分布式通知只是补充） */
             [replyDict writeToFile:@"/var/mobile/Documents/CarPlayX/applist.plist" atomically:YES];
-            [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] postNotification:[NSNotification notificationWithName:CPX_NOTIFICATION_APP_DATA object:kPrefsAppDataReceiving userInfo:replyDict]];
+            [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] postNotificationName:CPX_NOTIFICATION_APP_DATA object:kPrefsAppDataReceiving userInfo:replyDict deliverImmediately:YES];
             [appList release];
         }
     }];

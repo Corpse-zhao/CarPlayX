@@ -8,7 +8,7 @@
 #include <dlfcn.h>
 #include "CPXPreferences.h"
 
-#define CPX_VERSION @"0.2.0"
+#define CPX_VERSION @"0.2.1"
 
 #define BAIL_IF_UNSUPPORTED_IOS { \
     if ([[[UIDevice currentDevice] systemVersion] compare:@"14.0" options:NSNumericSearch] == NSOrderedAscending) \
@@ -64,8 +64,9 @@ static char *kPropertyKey_didDrawPlaceholder;
 #define CPX_DISABLE_PATH @"/var/mobile/Documents/CarPlayX/DISABLED"
 #define CPX_DISABLED ([[NSFileManager defaultManager] fileExistsAtPath:CPX_DISABLE_PATH])
 
-/* 金丝雀分级：读取 /var/mobile/Documents/CarPlayX/STAGE 文件里的数字（缺省 0）
-   0=ctor 只写日志  1=+壁纸类清点  2=+%init 钩子挂载  3=+MSHookFunction */
+/* 金丝雀分级（调试降级开关）：读取 /var/mobile/Documents/CarPlayX/STAGE_DEBUG 里的数字（缺省 3=全开）
+   0=ctor 只写日志  1=+壁纸类清点  2=+%init 钩子挂载  3=+MSHookFunction
+   ⚠️ 老版本读的是 STAGE 且缺省 0 —— 这曾导致所有钩子默认不挂载、应用清单永远为空（v0.2.1 改正） */
 int CPXStage(void);
 
 #define CARPLAY_DOCK_WIDTH 40

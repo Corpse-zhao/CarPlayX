@@ -152,16 +152,19 @@
 
 int CPXStage(void)
 {
+    /* 生产版缺省全开(3)；STAGE_DEBUG 文件仅用于排查时手动降级，普通用户永远不需要碰它 */
     @try
     {
-        NSString *s = [NSString stringWithContentsOfFile:@"/var/mobile/Documents/CarPlayX/STAGE"
+        NSString *s = [NSString stringWithContentsOfFile:@"/var/mobile/Documents/CarPlayX/STAGE_DEBUG"
                                                 encoding:NSUTF8StringEncoding error:NULL];
-        if (!s) return 0;
-        return [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].intValue;
+        if (!s) return 3;
+        int v = [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].intValue;
+        if (v < 0 || v > 3) return 3;
+        return v;
     }
     @catch (NSException *e)
     {
-        return 0;
+        return 3;
     }
 }
 

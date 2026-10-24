@@ -1,11 +1,27 @@
 #import "CPXAppListViewController.h"
 #import "CPXPrefsCommon.h"
+#import <objc/message.h>
 
 #define CPX_APPLIST_PATH @"/var/mobile/Documents/CarPlayX/applist.plist"
+
+static NSSet *CPXInfraIdentifiers(void)
+{
+    static NSSet *infra = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        infra = [NSSet setWithArray:@[
+            @"com.apple.CarPlayTemplateUIHost", @"com.apple.MusicUIService",
+            @"com.apple.springboard", @"com.apple.InCallService",
+            @"com.apple.CarPlaySettings", @"com.apple.CarPlayApp"
+        ]];
+    });
+    return infra;
+}
 
 @implementation CPXAppListViewController
 {
     NSArray *_appList;
+    id _replyObserver;   /* 分布式通知观察 token（ARC） */
 }
 
 - (void)viewDidLoad
@@ -13,14 +29,39 @@
     [super viewDidLoad];
     self.title = ([self.mode isEqualToString:@"add"]) ? @"加入 / 排除应用" : @"移除默认应用";
     [self loadAppList];
+
+    /* SpringBoard 写完清单会广播回复，收到立即刷新（不等 1.5s 兜底） */
+    __weak typeof(self) weakSelf = self;
+    _replyObserver = [[objc_getClass("NSDistributedNotificationCenter") defaultCenter]
+        addObserverForName:CPX_NOTIFICATION_APP_DATA object:kPrefsAppDataReceiving queue:nil
+        usingBlock:^(NSNotification *note)
+        {
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            dispatch_async(dispatch_get_main_queue(), ^
+            {
+                [strongSelf loadAppList];
+                [strongSelf.tableView reloadData];
+            });
+        }];
+}
+
+- (void)dealloc
+{
+    if (_replyObserver)
+    {
+        [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] removeObserver:_replyObserver];
+    }
 }
 
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-    /* 请求 SpringBoard 刷新清单（异步写 applist.plist），先展示已缓存数据 */
+    /* 先展示已缓存数据，再请求 SpringBoard 刷新（异步写 applist.plist） */
+    [self loadAppList];
+    [self.tableView reloadData];
     [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] postNotificationName:CPX_NOTIFICATION_APP_DATA object:kPrefsAppDataRequesting userInfo:nil deliverImmediately:YES];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self loadAppList];
         [self.tableView reloadData];
     });
@@ -32,12 +73,63 @@
     NSArray *list = data[@"appList"];
     if (!list.count)
     {
+        /* 文件为空（SpringBoard 侧钩子未生效/未注销刷新）→ App 内直接枚举兜底 */
+        list = [self fallbackAppList];
+    }
+    if (!list.count)
+    {
         _appList = nil;
         return;
     }
     NSSortDescriptor *stock = [[NSSortDescriptor alloc] initWithKey:@"isStock" ascending:NO];
     NSSortDescriptor *name = [[NSSortDescriptor alloc] initWithKey:@"name" ascending:YES];
     _appList = [list sortedArrayUsingDescriptors:@[stock, name]];
+}
+
+#pragma mark - App 进程内兜底枚举（LSApplicationWorkspace）
+
+- (NSArray *)fallbackAppList
+{
+    NSMutableArray *result = [NSMutableArray array];
+    @try
+    {
+        id workspace = ((id (*)(id, SEL))objc_msgSend)(objc_getClass("LSApplicationWorkspace"), NSSelectorFromString(@"defaultWorkspace"));
+        if (!workspace) return result;
+        NSArray *proxies = ((id (*)(id, SEL))objc_msgSend)(workspace, NSSelectorFromString(@"installedApplications"));
+        if (![proxies isKindOfClass:[NSArray class]]) return result;
+
+        for (id proxy in proxies)
+        {
+            NSString *bid = ((id (*)(id, SEL))objc_msgSend)(proxy, NSSelectorFromString(@"applicationIdentifier"));
+            if (![bid isKindOfClass:[NSString class]] || bid.length == 0) continue;
+            if ([CPXInfraIdentifiers() containsObject:bid]) continue;
+
+            NSString *name = ((id (*)(id, SEL))objc_msgSend)(proxy, NSSelectorFromString(@"localizedName"));
+            if (![name isKindOfClass:[NSString class]] || name.length == 0) name = bid;
+
+            NSString *appType = ((id (*)(id, SEL))objc_msgSend)(proxy, NSSelectorFromString(@"applicationType"));
+            BOOL isStock = [appType isKindOfClass:[NSString class]] && [appType isEqualToString:@"System"];
+
+            UIImage *icon = nil;
+            @try
+            {
+                icon = ((UIImage *(*)(id, SEL, NSString *, int, CGFloat))objc_msgSend)(objc_getClass("UIImage"), NSSelectorFromString(@"_applicationIconImageForBundleIdentifier:format:scale:"), bid, 0, [UIScreen mainScreen].scale);
+            }
+            @catch (NSException *e) { icon = nil; }
+            NSData *iconData = icon ? UIImagePNGRepresentation(icon) : [NSData data];
+
+            [result addObject:@{@"name": name, @"bundleID": bid, @"iconImage": iconData, @"isStock": @(isStock), @"hasCarPlay": @(NO)}];
+        }
+        if (result.count)
+        {
+            CPXPrefsLog(@"[App] applist.plist 为空，已用 LSApplicationWorkspace 兜底枚举 %lu 个应用", (unsigned long)result.count);
+        }
+    }
+    @catch (NSException *e)
+    {
+        CPXPrefsLog(@"[App] LSApplicationWorkspace 兜底枚举失败: %@", e);
+    }
+    return result;
 }
 
 #pragma mark - 开关状态
