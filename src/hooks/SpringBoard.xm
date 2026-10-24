@@ -85,16 +85,14 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
 {
     LOG_LIFECYCLE_EVENT;
 
-    if ([[CPXPreferences sharedInstance] masterEnabled])
-    {
-        [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] addObserver:self selector:NSSelectorFromString(@"handleCarPlayLaunchNotification:") name:CPX_NOTIFICATION_LAUNCH object:nil];
+    /* 无条件注册（处理器内部各自判断 masterEnabled），保证后开开关也能收到通知 */
+    [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] addObserver:self selector:NSSelectorFromString(@"handleCarPlayLaunchNotification:") name:CPX_NOTIFICATION_LAUNCH object:nil];
 
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(carplayIsConnectedChanged) name:@"CarPlayIsConnectedDidChange" object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(carplayIsConnectedChanged) name:@"CarPlayIsConnectedDidChange" object:nil];
 
-        NSMutableArray *appIdentifiersToIgnoreLockAssertions = [[NSMutableArray alloc] init];
-        objc_setAssociatedObject(self, &kPropertyKey_lockAssertionIdentifiers, appIdentifiersToIgnoreLockAssertions, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [appIdentifiersToIgnoreLockAssertions release];
-    }
+    NSMutableArray *appIdentifiersToIgnoreLockAssertions = [[NSMutableArray alloc] init];
+    objc_setAssociatedObject(self, &kPropertyKey_lockAssertionIdentifiers, appIdentifiersToIgnoreLockAssertions, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [appIdentifiersToIgnoreLockAssertions release];
 
     %orig;
 
@@ -148,6 +146,8 @@ int (*orig_BKSDisplayServicesSetScreenBlanked)(int);
             }
             CPXLog(@"[设置面板] 提供 app 清单: %lu 个 (跳过 %d)", (unsigned long)[appList count], skipped);
             NSDictionary *replyDict = [NSDictionary dictionaryWithObject:appList forKey:@"appList"];
+            /* 同步落盘一份，供设置面板直接读取（分布式通知只是补充） */
+            [replyDict writeToFile:@"/var/mobile/Documents/CarPlayX/applist.plist" atomically:YES];
             [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] postNotification:[NSNotification notificationWithName:CPX_NOTIFICATION_APP_DATA object:kPrefsAppDataReceiving userInfo:replyDict]];
             [appList release];
         }

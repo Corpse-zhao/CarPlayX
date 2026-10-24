@@ -8,7 +8,7 @@
 #include <dlfcn.h>
 #include "CPXPreferences.h"
 
-#define CPX_VERSION @"0.1.7"
+#define CPX_VERSION @"0.1.8"
 
 #define BAIL_IF_UNSUPPORTED_IOS { \
     if ([[[UIDevice currentDevice] systemVersion] compare:@"14.0" options:NSNumericSearch] == NSOrderedAscending) \

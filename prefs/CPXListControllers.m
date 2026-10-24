@@ -1,24 +1,38 @@
 #import "CPXListControllers.h"
 #import "CPXPrefsCommon.h"
 
-@implementation CPXRootListController
+/*
+v0.1.8：全面改用 Preferences 原生 specifier 机制。
+不再自绘 UITableView / 不再覆盖父类数据源方法 —— 全部交给父类机制驱动，
+这是所有成熟 tweak 的标准写法，兼容性最高。
+App 清单由 SpringBoard 写入 /var/mobile/Documents/CarPlayX/applist.plist，此处同步读取。
+*/
 
-/* 兼容 Preferences 的多种实例化路径：init / initForContentSize: / initWithSpecifier: */
-- (instancetype)init
+#define CPX_APPLIST_PATH @"/var/mobile/Documents/CarPlayX/applist.plist"
+
+/* ============ 通用工具 ============ */
+
+static NSArray *CPXSortedAppList(void)
 {
-    if ((self = [super init]))
-    {
-        [self cpxCommonInit];
-    }
-    return self;
+    NSDictionary *data = [NSDictionary dictionaryWithContentsOfFile:CPX_APPLIST_PATH];
+    NSArray *list = data[@"appList"];
+    if (!list.count) return nil;
+
+    NSSortDescriptor *stock = [[NSSortDescriptor alloc] initWithKey:@"isStock" ascending:NO];
+    NSSortDescriptor *name = [[NSSortDescriptor alloc] initWithKey:@"name" ascending:YES];
+    NSArray *sorted = [list sortedArrayUsingDescriptors:@[stock, name]];
+    return sorted;
 }
+
+/* ============ 主页 ============ */
+
+@implementation CPXRootListController
 
 - (id)initForContentSize:(CGSize)size
 {
-    /* 必须走父类的 initForContentSize:（真实 PSListController 的设计初始化器），跳过会缺内部状态 */
     if ((self = [super initForContentSize:size]))
     {
-        [self cpxCommonInit];
+        [self setTitle:@"CarPlayX"];
     }
     return self;
 }
@@ -27,223 +41,163 @@
 {
     if ((self = [super initWithSpecifier:specifier]))
     {
-        [self cpxCommonInit];
+        [self setTitle:@"CarPlayX"];
     }
     return self;
 }
 
-- (void)cpxCommonInit
+- (instancetype)init
 {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
+    if ((self = [super init]))
+    {
         [self setTitle:@"CarPlayX"];
-        /* 预取 app 清单（SpringBoard 通过分布式通知回传） */
-        [self requestAppList];
-    });
-}
-
-- (void)loadView
-{
-    /* 自绘 UI：完全接管 loadView，不依赖父类的 specifier 机制 */
-    UIView *content = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
-    self.view = content;
-
-    UITableView *table = [[UITableView alloc] initWithFrame:content.bounds style:UITableViewStyleInsetGrouped];
-    table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    table.delegate = self;
-    table.dataSource = self;
-    [content addSubview:table];
-    self.rootTable = table;
-}
-
-- (void)requestAppList
-{
-    [[NSDistributedNotificationCenter defaultCenter] addObserverForName:CPX_NOTIFICATION_APP_DATA object:kPrefsAppDataReceiving queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-        NSDictionary *data = note.userInfo;
-        NSArray *list = data[@"appList"];
-        if (list)
-        {
-            self.appList = list;
-            CPXPrefsLog(@"[设置面板] 收到 app 清单 %lu 个", (unsigned long)list.count);
-        }
-    }];
-    [[NSDistributedNotificationCenter defaultCenter] postNotificationName:CPX_NOTIFICATION_APP_DATA object:kPrefsAppDataRequesting userInfo:nil deliverImmediately:YES];
-}
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
-{
-    return 4;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
-{
-    switch (section)
-    {
-        case 0: return 2;   /* 总开关 / 自定义壁纸开关 */
-        case 1: return 2;   /* 加入应用 / 移除默认应用 */
-        case 2: return 1;   /* 五列布局 */
-        case 3: return 1;   /* 复制诊断日志 */
     }
-    return 0;
+    return self;
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+/* 进页面时向 SpringBoard 请求最新 app 清单（异步写到 applist.plist） */
+- (void)viewWillAppear:(BOOL)animated
 {
-    static NSString *cellId = @"CPXRootCell";
-    static NSString *switchId = @"CPXRootSwitchCell";
-    UITableViewCell *cell;
+    [super viewWillAppear:animated];
+    [[objc_getClass("NSDistributedNotificationCenter") defaultCenter] postNotificationName:CPX_NOTIFICATION_APP_DATA object:kPrefsAppDataRequesting userInfo:nil deliverImmediately:YES];
+}
 
-    if (indexPath.section == 0 || indexPath.section == 2)
+- (NSArray *)specifiers
+{
+    if (!_specifiers)
     {
-        cell = [tableView dequeueReusableCellWithIdentifier:switchId];
-        if (!cell)
-        {
-            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:switchId];
-        }
+        NSMutableArray *specs = [NSMutableArray array];
 
-        UISwitch *sw = (UISwitch *)cell.accessoryView;
-        if (![sw isKindOfClass:[UISwitch class]])
-        {
-            sw = [[UISwitch alloc] initWithFrame:CGRectZero];
-            cell.accessoryView = sw;
-        }
+        PSSpecifier *g1 = [PSSpecifier groupSpecifierWithTitle:@"功能开关"];
+        [g1 setProperty:@"开关改动即时生效，无需注销" forKey:@"footerText"];
+        [specs addObject:g1];
 
-        if (indexPath.section == 0 && indexPath.row == 0)
-        {
-            cell.textLabel.text = @"启用 CarPlayX";
-            id v = [CPXPrefsStore valueForKey:@"masterEnabled"];
-            sw.on = v ? [v boolValue] : NO;
-            [sw addTarget:self action:@selector(masterSwitchChanged:) forControlEvents:UIControlEventValueChanged];
-        }
-        else if (indexPath.section == 0 && indexPath.row == 1)
-        {
-            cell.textLabel.text = @"自定义壁纸";
-            id v = [CPXPrefsStore valueForKey:@"wallpaperEnabled"];
-            sw.on = v ? [v boolValue] : NO;
-            [sw addTarget:self action:@selector(wallpaperSwitchChanged:) forControlEvents:UIControlEventValueChanged];
-        }
-        else if (indexPath.section == 2)
-        {
-            cell.textLabel.text = @"五列图标布局";
-            id v = [CPXPrefsStore valueForKey:@"fiveColumnIconLayout"];
-            sw.on = v ? [v boolValue] : NO;
-            [sw addTarget:self action:@selector(fiveColumnSwitchChanged:) forControlEvents:UIControlEventValueChanged];
-        }
-    }
-    else
-    {
-        cell = [tableView dequeueReusableCellWithIdentifier:cellId];
-        if (!cell)
-        {
-            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:cellId];
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        }
+        PSSpecifier *master = [PSSpecifier preferenceSpecifierNamed:@"启用 CarPlayX"
+                                                             target:self
+                                                                set:@selector(setValue:forSpecifier:)
+                                                                get:@selector(valueForSpecifier:)
+                                                             detail:nil
+                                                                cell:kCPXCellSwitch
+                                                                 edit:nil];
+        [master setProperty:@"masterEnabled" forKey:@"key"];
+        [master setProperty:@NO forKey:@"default"];
+        [specs addObject:master];
 
-        if (indexPath.section == 1 && indexPath.row == 0)
+        PSSpecifier *wallpaper = [PSSpecifier preferenceSpecifierNamed:@"自定义壁纸"
+                                                                target:self
+                                                                   set:@selector(setValue:forSpecifier:)
+                                                                   get:@selector(valueForSpecifier:)
+                                                                detail:nil
+                                                                   cell:kCPXCellSwitch
+                                                                    edit:nil];
+        [wallpaper setProperty:@"wallpaperEnabled" forKey:@"key"];
+        [wallpaper setProperty:@NO forKey:@"default"];
+        [specs addObject:wallpaper];
+
+        PSSpecifier *g2 = [PSSpecifier groupSpecifierWithTitle:@"应用管理"];
+        [g2 setProperty:@"「移除默认应用」可隐藏 CarPlay 默认自带且系统不允许取消的 App；「加入 / 排除应用」可把任意第三方 App 强制加入 CarPlay 主屏。" forKey:@"footerText"];
+        [specs addObject:g2];
+
+        PSSpecifier *addLink = [PSSpecifier preferenceSpecifierNamed:@"加入 / 排除应用"
+                                                              target:self
+                                                                 set:NULL
+                                                                 get:NULL
+                                                              detail:[CPXAddListController class]
+                                                                 cell:kCPXCellLink
+                                                                  edit:nil];
+        [addLink setProperty:@"强制把 App 加进 CarPlay" forKey:@"subtitle"];
+        [specs addObject:addLink];
+
+        PSSpecifier *removeLink = [PSSpecifier preferenceSpecifierNamed:@"移除默认应用"
+                                                                 target:self
+                                                                    set:NULL
+                                                                    get:NULL
+                                                                 detail:[CPXRemoveListController class]
+                                                                    cell:kCPXCellLink
+                                                                     edit:nil];
+        [removeLink setProperty:@"从 CarPlay 隐藏默认 App" forKey:@"subtitle"];
+        [specs addObject:removeLink];
+
+        PSSpecifier *g3 = [PSSpecifier groupSpecifierWithTitle:@"显示"];
+        [specs addObject:g3];
+
+        PSSpecifier *fiveCol = [PSSpecifier preferenceSpecifierNamed:@"五列图标布局"
+                                                              target:self
+                                                                 set:@selector(setValue:forSpecifier:)
+                                                                 get:@selector(valueForSpecifier:)
+                                                              detail:nil
+                                                                 cell:kCPXCellSwitch
+                                                                  edit:nil];
+        [fiveCol setProperty:@"fiveColumnIconLayout" forKey:@"key"];
+        [fiveCol setProperty:@NO forKey:@"default"];
+        [specs addObject:fiveCol];
+
+        PSSpecifier *g4 = [PSSpecifier groupSpecifierWithTitle:@"诊断"];
+        [g4 setProperty:@"CarPlayX %@ · 基于开源项目 CarPlayEnable (Apache-2.0, Ethan Arbuckle) 移植扩展" forKey:@"footerText"];
+        [specs addObject:g4];
+
+        PSSpecifier *logBtn = [PSSpecifier preferenceSpecifierNamed:@"复制诊断日志"
+                                                             target:self
+                                                                set:NULL
+                                                                get:NULL
+                                                             detail:nil
+                                                                cell:kCPXCellButton
+                                                                 edit:nil];
+        if ([logBtn respondsToSelector:@selector(setTarget:action:)])
         {
-            cell.textLabel.text = @"加入 / 排除应用";
-            cell.detailTextLabel.text = @"强制把 App 加进 CarPlay";
+            [logBtn setTarget:self action:@selector(copyLog:)];
         }
-        else if (indexPath.section == 1 && indexPath.row == 1)
+        if ([logBtn respondsToSelector:@selector(setButtonAction:)])
         {
-            cell.textLabel.text = @"移除默认应用";
-            cell.detailTextLabel.text = @"从 CarPlay 隐藏默认 App";
+            [logBtn setButtonAction:@selector(copyLog:)];
         }
-        else if (indexPath.section == 3 && indexPath.row == 0)
-        {
-            cell.textLabel.text = @"复制诊断日志";
-            cell.detailTextLabel.text = nil;
-            cell.accessoryType = UITableViewCellAccessoryNone;
-        }
+        [specs addObject:logBtn];
+
+        _specifiers = specs;
     }
 
-    return cell;
+    return _specifiers;
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
+/* specifier 的 key 属性 -> CPXPrefsStore 存取 */
+- (NSString *)keyForSpecifier:(PSSpecifier *)spec
 {
-    switch (section)
-    {
-        case 0: return @"功能开关";
-        case 1: return @"应用管理";
-        case 2: return @"显示";
-        case 3: return @"诊断";
-    }
-    return nil;
+    NSString *key = [spec propertyForKey:@"key"];
+    if (!key) key = [spec propertyForKey:@"identifier"];
+    return key;
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
+- (id)valueForSpecifier:(PSSpecifier *)spec
 {
-    if (section == 1)
-    {
-        return @"「移除默认应用」可以隐藏 CarPlay 默认自带且系统不允许取消的 App（如播客、图书等）；「加入应用」可以把任意第三方 App 强制加入 CarPlay 主屏。改动即时生效，无需注销。";
-    }
-    if (section == 3)
-    {
-        return [NSString stringWithFormat:@"CarPlayX %@ · 基于开源项目 CarPlayEnable (Apache-2.0, Ethan Arbuckle) 移植扩展\n连接车机后把诊断日志发给开发者，便于排查问题。", CPX_VERSION];
-    }
-    return nil;
+    NSString *key = [self keyForSpecifier:spec];
+    id v = key ? [CPXPrefsStore valueForKey:key] : nil;
+    if (v == nil) v = [spec propertyForKey:@"default"] ?: @NO;
+    return v;
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+- (void)setValue:(id)value forSpecifier:(PSSpecifier *)spec
 {
-    [tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-    if (indexPath.section == 1 && indexPath.row == 0)
-    {
-        if (self.appList.count == 0)
-        {
-            UIAlertView *av = [[UIAlertView alloc] initWithTitle:@"正在加载" message:@"App 清单尚未拿到，请稍后再试一次。" delegate:nil cancelButtonTitle:@"好" otherButtonTitles:nil];
-            [av show];
-            return;
-        }
-        CPXAppListController *vc = [[CPXAppListController alloc] initWithAppList:self.appList mode:@"add"];
-        [self.navigationController pushViewController:vc animated:YES];
-    }
-    else if (indexPath.section == 1 && indexPath.row == 1)
-    {
-        if (self.appList.count == 0)
-        {
-            UIAlertView *av = [[UIAlertView alloc] initWithTitle:@"正在加载" message:@"App 清单尚未拿到，请稍后再试一次。" delegate:nil cancelButtonTitle:@"好" otherButtonTitles:nil];
-            [av show];
-            return;
-        }
-        CPXAppListController *vc = [[CPXAppListController alloc] initWithAppList:self.appList mode:@"remove"];
-        [self.navigationController pushViewController:vc animated:YES];
-    }
-    else if (indexPath.section == 3 && indexPath.row == 0)
-    {
-        NSString *log = [NSString stringWithContentsOfFile:@"/var/mobile/Documents/CarPlayX/probe.txt" encoding:NSUTF8StringEncoding error:NULL];
-        if (!log.length)
-        {
-            log = @"暂无日志。请先连接一次 CarPlay 再回来复制。";
-        }
-        else if (log.length > 20000)
-        {
-            log = [log substringFromIndex:log.length - 20000];
-        }
-        UIPasteboard.generalPasteboard.string = log;
-        UIAlertView *av = [[UIAlertView alloc] initWithTitle:@"已复制到剪贴板" message:@"最近 20KB 诊断日志已复制，直接粘贴发给开发者即可。" delegate:nil cancelButtonTitle:@"好" otherButtonTitles:nil];
-        [av show];
-    }
+    NSString *key = [self keyForSpecifier:spec];
+    if (!key) return;
+    [CPXPrefsStore setValue:value forKey:key];
+    NSString *notify = [key isEqualToString:@"wallpaperEnabled"] ? kPrefsWallpaperChanged : kPrefsAppLibraryChanged;
+    [CPXPrefsStore postPrefsChangedWithObject:notify];
 }
 
-- (void)masterSwitchChanged:(UISwitch *)sender
+- (void)copyLog:(PSSpecifier *)spec
 {
-    [CPXPrefsStore setValue:@(sender.on) forKey:@"masterEnabled"];
-    [CPXPrefsStore postPrefsChangedWithObject:kPrefsAppLibraryChanged];
-}
-
-- (void)wallpaperSwitchChanged:(UISwitch *)sender
-{
-    [CPXPrefsStore setValue:@(sender.on) forKey:@"wallpaperEnabled"];
-    [CPXPrefsStore postPrefsChangedWithObject:kPrefsWallpaperChanged];
-}
-
-- (void)fiveColumnSwitchChanged:(UISwitch *)sender
-{
-    [CPXPrefsStore setValue:@(sender.on) forKey:@"fiveColumnIconLayout"];
-    [CPXPrefsStore postPrefsChangedWithObject:kPrefsAppLibraryChanged];
+    NSString *log = [NSString stringWithContentsOfFile:@"/var/mobile/Documents/CarPlayX/probe.txt" encoding:NSUTF8StringEncoding error:NULL];
+    if (!log.length)
+    {
+        log = @"暂无日志。请先连接一次 CarPlay 再回来复制。";
+    }
+    else if (log.length > 20000)
+    {
+        log = [log substringFromIndex:log.length - 20000];
+    }
+    UIPasteboard.generalPasteboard.string = log;
+    UIAlertView *av = [[UIAlertView alloc] initWithTitle:@"已复制到剪贴板" message:@"最近 20KB 诊断日志已复制，直接粘贴发给开发者即可。" delegate:nil cancelButtonTitle:@"好" otherButtonTitles:nil];
+    [av show];
 }
 
 @end
@@ -251,236 +205,254 @@
 /* ============ 应用列表页 ============ */
 
 @implementation CPXAppListController
+
+- (NSString *)mode
 {
-    NSArray *_appList;
-    NSString *_mode;
-    UITableView *_table;
+    return [self isKindOfClass:[CPXAddListController class]] ? @"add" : @"remove";
 }
 
-- (id)initWithAppList:(NSArray *)appList mode:(NSString *)mode
+- (id)initForContentSize:(CGSize)size
 {
-    if ((self = [super init]))
+    if ((self = [super initForContentSize:size]))
     {
-        NSSortDescriptor *stock = [[NSSortDescriptor alloc] initWithKey:@"isStock" ascending:NO];
-        NSSortDescriptor *name = [[NSSortDescriptor alloc] initWithKey:@"name" ascending:YES];
-        _appList = [appList sortedArrayUsingDescriptors:@[stock, name]];
-        _mode = mode;
-        if ([mode isEqualToString:@"add"])
-            [self setTitle:@"加入 / 排除应用"];
-        else
-            [self setTitle:@"移除默认应用"];
+        [self setTitle:([[self mode] isEqualToString:@"add"]) ? @"加入 / 排除应用" : @"移除默认应用"];
     }
     return self;
 }
 
-- (void)viewDidLoad
+- (id)initWithSpecifier:(PSSpecifier *)specifier
 {
-    [super viewDidLoad];
-    _table = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleInsetGrouped];
-    _table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _table.delegate = self;
-    _table.dataSource = self;
-    [self.view addSubview:_table];
+    if ((self = [super initWithSpecifier:specifier]))
+    {
+        [self setTitle:([[self mode] isEqualToString:@"add"]) ? @"加入 / 排除应用" : @"移除默认应用"];
+    }
+    return self;
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+- (void)viewWillAppear:(BOOL)animated
 {
-    return 1;
+    [super viewWillAppear:animated];
+    /* 清单可能刚被 SpringBoard 更新，重建 specifiers */
+    [self reloadSpecifiers];
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+- (NSArray *)specifiers
 {
-    return (NSInteger)_appList.count;
+    if (!_specifiers)
+    {
+        NSMutableArray *specs = [NSMutableArray array];
+        BOOL addMode = [[self mode] isEqualToString:@"add"];
+
+        PSSpecifier *group = [PSSpecifier groupSpecifierWithTitle:addMode ? @"勾选 = 在 CarPlay 显示" : @"勾选 = 已从 CarPlay 移除"];
+        [group setProperty:addMode
+            ? @"第三方 App 全部默认加入 CarPlay，取消勾选即排除。系统自带 App 默认不强制加入。"
+            : @"用于移除 CarPlay 默认添加且系统不允许删除的 App（播客、图书、新闻等），取消勾选即可恢复。"
+             forKey:@"footerText"];
+        [specs addObject:group];
+
+        NSArray *list = CPXSortedAppList();
+        if (!list)
+        {
+            PSSpecifier *empty = [PSSpecifier preferenceSpecifierNamed:@"清单尚未加载，请返回本页后重新进入（已向系统请求清单）"
+                                                                target:nil
+                                                                   set:NULL
+                                                                   get:NULL
+                                                                detail:nil
+                                                                   cell:kCPXCellStaticText
+                                                                    edit:nil];
+            [specs addObject:empty];
+            _specifiers = specs;
+            return _specifiers;
+        }
+
+        for (NSDictionary *app in list)
+        {
+            NSString *name = app[@"name"] ?: app[@"bundleID"];
+            PSSpecifier *sw = [PSSpecifier preferenceSpecifierNamed:name
+                                                             target:self
+                                                                set:@selector(setValue:forSpecifier:)
+                                                                get:@selector(valueForSpecifier:)
+                                                             detail:nil
+                                                                cell:kCPXCellSwitch
+                                                                 edit:nil];
+            [sw setProperty:app[@"bundleID"] forKey:@"bundleID"];
+            id iconData = app[@"iconImage"];
+            if (iconData)
+            {
+                UIImage *icon = [UIImage imageWithData:iconData];
+                if (icon) [sw setProperty:icon forKey:@"iconImage"];
+            }
+            [specs addObject:sw];
+        }
+
+        _specifiers = specs;
+    }
+
+    return _specifiers;
 }
 
-- (BOOL)appIsIncludedInAddMode:(NSDictionary *)app
+- (BOOL)appIsOn:(NSString *)bid
 {
-    /* 加入模式：默认全加，勾选 = 在 CarPlay 上显示 */
-    NSArray *excluded = [CPXPrefsStore valueForKey:@"excludedApps"];
-    NSString *bid = app[@"bundleID"];
-    return !(excluded && [excluded containsObject:bid]);
-}
-
-- (BOOL)appIsRemovedInRemoveMode:(NSDictionary *)app
-{
+    BOOL addMode = [[self mode] isEqualToString:@"add"];
+    if (addMode)
+    {
+        /* 加入模式：默认全开，excludedApps 里的关闭 */
+        NSArray *excluded = [CPXPrefsStore valueForKey:@"excludedApps"];
+        return !(excluded && [excluded containsObject:bid]);
+    }
     NSArray *removed = [CPXPrefsStore valueForKey:@"removedApps"];
-    NSString *bid = app[@"bundleID"];
     return removed && [removed containsObject:bid];
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+- (id)valueForSpecifier:(PSSpecifier *)spec
 {
-    static NSString *cellId = @"CPXAppCell";
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellId];
-    if (!cell)
-    {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:cellId];
-    }
-
-    NSDictionary *app = _appList[indexPath.row];
-    NSString *bid = app[@"bundleID"];
-
-    cell.textLabel.text = app[@"name"];
-    cell.detailTextLabel.text = bid;
-    cell.imageView.image = [UIImage imageWithData:app[@"iconImage"]];
-
-    if ([_mode isEqualToString:@"add"])
-    {
-        cell.accessoryType = [self appIsIncludedInAddMode:app] ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
-        /* 系统自带 app 在"加入"页里置灰（默认不加入也不建议加） */
-        cell.textLabel.enabled = ![app[@"isStock"] boolValue];
-        cell.imageView.alpha = cell.textLabel.enabled ? 1.0 : 0.35;
-    }
-    else
-    {
-        cell.accessoryType = [self appIsRemovedInRemoveMode:app] ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
-        cell.textLabel.enabled = YES;
-    }
-
-    return cell;
+    NSString *bid = [spec propertyForKey:@"bundleID"];
+    if (!bid) return @NO;
+    return @([self appIsOn:bid]);
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
+- (void)setValue:(id)value forSpecifier:(PSSpecifier *)spec
 {
-    return [_mode isEqualToString:@"add"] ? @"勾选 = 在 CarPlay 显示" : @"勾选 = 已从 CarPlay 移除";
-}
+    NSString *bid = [spec propertyForKey:@"bundleID"];
+    if (!bid) return;
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
-{
-    if ([_mode isEqualToString:@"add"])
+    BOOL addMode = [[self mode] isEqualToString:@"add"];
+    NSString *listKey = addMode ? @"excludedApps" : @"removedApps";
+    BOOL currentlyOn = [self appIsOn:bid];
+    BOOL shouldOn = [value boolValue];
+    BOOL shouldAddToList = currentlyOn && !shouldOn;   /* 从开到关 => 进黑名单 */
+    BOOL shouldRemoveFromList = !currentlyOn && shouldOn;
+
+    NSMutableArray *list = [[CPXPrefsStore valueForKey:listKey] mutableCopy] ?: [NSMutableArray array];
+    if (shouldAddToList && ![list containsObject:bid])
     {
-        return @"第三方 App 全部默认加入 CarPlay，取消勾选即排除。系统自带 App 默认不强制加入（它们原本就在或按需手动加）。";
+        [list addObject:bid];
     }
-    return @"用于移除 CarPlay 默认添加且系统不允许删除的 App（播客、图书、新闻等）。取消勾选即可恢复显示。";
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
-{
-    [tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-    NSDictionary *app = _appList[indexPath.row];
-    NSString *bid = app[@"bundleID"];
-    NSString *key = [_mode isEqualToString:@"add"] ? @"excludedApps" : @"removedApps";
-    BOOL currentlyOn = [_mode isEqualToString:@"add"] ? [self appIsIncludedInAddMode:app] : ![self appIsRemovedInRemoveMode:app];
-
-    /* 目前状态 -> 新状态取反 */
-    NSMutableArray *list = [[CPXPrefsStore valueForKey:key] mutableCopy] ?: [NSMutableArray array];
-    BOOL shouldAddToList = !currentlyOn;
-
-    if (shouldAddToList)
-    {
-        if (![list containsObject:bid]) [list addObject:bid];
-    }
-    else
+    else if (shouldRemoveFromList)
     {
         [list removeObject:bid];
     }
+    else
+    {
+        return;
+    }
 
-    [CPXPrefsStore setValue:list forKey:key];
+    [CPXPrefsStore setValue:list forKey:listKey];
     [CPXPrefsStore postPrefsChangedWithObject:kPrefsAppLibraryChanged];
-    CPXPrefsLog(@"[设置面板] %@ 列表更新: %@ -> %@", _mode, bid, shouldAddToList ? @"加入名单" : @"移出名单");
-
-    [_table reloadData];
+    CPXPrefsLog(@"[设置面板] %@ 列表更新: %@ -> %@", listKey, bid, shouldAddToList ? @"加入名单" : @"移出名单");
 }
 
+@end
+
+@implementation CPXAddListController
+@end
+
+@implementation CPXRemoveListController
 @end
 
 /* ============ 壁纸设置页 ============ */
 
 @implementation CPXWallpaperController
 
-- (void)viewDidLoad
+- (id)initForContentSize:(CGSize)size
 {
-    [super viewDidLoad];
-    [self setTitle:@"自定义壁纸"];
-
-    _table = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleInsetGrouped];
-    _table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _table.delegate = self;
-    _table.dataSource = self;
-    [self.view addSubview:_table];
-}
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
-{
-    return 2;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
-{
-    return section == 0 ? 1 : 2;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
-{
-    static NSString *switchId = @"CPXWallSwitchCell";
-    static NSString *cellId = @"CPXWallCell";
-    UITableViewCell *cell;
-
-    if (indexPath.section == 0)
+    if ((self = [super initForContentSize:size]))
     {
-        cell = [tableView dequeueReusableCellWithIdentifier:switchId];
-        if (!cell)
+        [self setTitle:@"自定义壁纸"];
+    }
+    return self;
+}
+
+- (id)initWithSpecifier:(PSSpecifier *)specifier
+{
+    if ((self = [super initWithSpecifier:specifier]))
+    {
+        [self setTitle:@"自定义壁纸"];
+    }
+    return self;
+}
+
+- (NSArray *)specifiers
+{
+    if (!_specifiers)
+    {
+        NSMutableArray *specs = [NSMutableArray array];
+
+        PSSpecifier *g1 = [PSSpecifier groupSpecifierWithTitle:@"壁纸"];
+        [specs addObject:g1];
+
+        PSSpecifier *sw = [PSSpecifier preferenceSpecifierNamed:@"启用自定义壁纸"
+                                                         target:self
+                                                            set:@selector(setValue:forSpecifier:)
+                                                            get:@selector(valueForSpecifier:)
+                                                         detail:nil
+                                                            cell:kCPXCellSwitch
+                                                             edit:nil];
+        [sw setProperty:@"wallpaperEnabled" forKey:@"key"];
+        [sw setProperty:@NO forKey:@"default"];
+        [specs addObject:sw];
+
+        PSSpecifier *g2 = [PSSpecifier groupSpecifierWithTitle:@"操作"];
+        [g2 setProperty:@"建议使用横版图片（如 1280×720），保存后重新连接 CarPlay 即可看到新壁纸。壁纸同时作用于 CarPlay 主屏与应用托管窗口背景。" forKey:@"footerText"];
+        [specs addObject:g2];
+
+        PSSpecifier *pick = [PSSpecifier preferenceSpecifierNamed:@"从相册选择壁纸图片"
+                                                           target:self
+                                                              set:NULL
+                                                              get:NULL
+                                                           detail:nil
+                                                              cell:kCPXCellButton
+                                                               edit:nil];
+        if ([pick respondsToSelector:@selector(setTarget:action:)])
         {
-            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:switchId];
+            [pick setTarget:self action:@selector(presentPicker:)];
         }
-        cell.textLabel.text = @"启用自定义壁纸";
-
-        UISwitch *sw = (UISwitch *)cell.accessoryView;
-        if (![sw isKindOfClass:[UISwitch class]])
+        if ([pick respondsToSelector:@selector(setButtonAction:)])
         {
-            sw = [[UISwitch alloc] initWithFrame:CGRectZero];
-            cell.accessoryView = sw;
+            [pick setButtonAction:@selector(presentPicker:)];
         }
-        id v = [CPXPrefsStore valueForKey:@"wallpaperEnabled"];
-        sw.on = v ? [v boolValue] : NO;
-        [sw addTarget:self action:@selector(enabledChanged:) forControlEvents:UIControlEventValueChanged];
-    }
-    else
-    {
-        cell = [tableView dequeueReusableCellWithIdentifier:cellId];
-        if (!cell)
+        [specs addObject:pick];
+
+        PSSpecifier *del = [PSSpecifier preferenceSpecifierNamed:@"恢复默认壁纸（删除自定义壁纸）"
+                                                          target:self
+                                                             set:NULL
+                                                             get:NULL
+                                                          detail:nil
+                                                             cell:kCPXCellButton
+                                                              edit:nil];
+        if ([del respondsToSelector:@selector(setTarget:action:)])
         {
-            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellId];
+            [del setTarget:self action:@selector(deleteWallpaper:)];
         }
-        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        cell.textLabel.text = indexPath.row == 0 ? @"从相册选择壁纸图片" : @"恢复默认壁纸";
-        cell.textLabel.textColor = indexPath.row == 1 ? [UIColor systemRedColor] : [UIColor labelColor];
+        if ([del respondsToSelector:@selector(setButtonAction:)])
+        {
+            [del setButtonAction:@selector(deleteWallpaper:)];
+        }
+        [specs addObject:del];
+
+        _specifiers = specs;
     }
 
-    return cell;
+    return _specifiers;
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
+- (id)valueForSpecifier:(PSSpecifier *)spec
 {
-    if (section == 1)
-    {
-        return @"建议使用横版图片（如 1280×720），保存后重新连接 CarPlay 即可看到新壁纸。壁纸同时作用于 CarPlay 主屏与应用托管窗口背景。";
-    }
-    return nil;
+    NSString *key = [spec propertyForKey:@"key"];
+    id v = key ? [CPXPrefsStore valueForKey:key] : nil;
+    if (v == nil) v = [spec propertyForKey:@"default"] ?: @NO;
+    return v;
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+- (void)setValue:(id)value forSpecifier:(PSSpecifier *)spec
 {
-    [tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-    if (indexPath.section == 1 && indexPath.row == 0)
-    {
-        [self presentPicker];
-    }
-    else if (indexPath.section == 1 && indexPath.row == 1)
-    {
-        [self deleteWallpaper];
-    }
-}
-
-- (void)enabledChanged:(UISwitch *)sender
-{
-    [CPXPrefsStore setValue:@(sender.on) forKey:@"wallpaperEnabled"];
+    NSString *key = [spec propertyForKey:@"key"];
+    if (!key) return;
+    [CPXPrefsStore setValue:value forKey:key];
     [CPXPrefsStore postPrefsChangedWithObject:kPrefsWallpaperChanged];
 }
 
-- (void)presentPicker
+- (void)presentPicker:(PSSpecifier *)spec
 {
     PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
     config.filter = [PHPickerFilter imagesFilter];
@@ -501,7 +473,6 @@
         return;
     }
 
-    /* 按具体 -> 抽象逐个尝试类型 */
     NSItemProvider *provider = result.itemProvider;
     NSString *dir = CPX_WALLPAPER_DIR;
 
@@ -522,7 +493,6 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (data.length > 0)
                 {
-                    /* 统一转成 PNG 落盘，避免扩展名/格式坑 */
                     UIImage *img = [UIImage imageWithData:data];
                     NSData *pngData = img ? UIImagePNGRepresentation(img) : data;
                     NSString *path = [dir stringByAppendingPathComponent:@"wallpaper.png"];
@@ -548,7 +518,7 @@
     loadType(0);
 }
 
-- (void)deleteWallpaper
+- (void)deleteWallpaper:(PSSpecifier *)spec
 {
     NSFileManager *fm = [NSFileManager defaultManager];
     BOOL existed = NO;

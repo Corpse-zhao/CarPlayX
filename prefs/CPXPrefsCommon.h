@@ -10,7 +10,7 @@
 - (void)postNotificationName:(NSString *)name object:(id)object userInfo:(NSDictionary *)userInfo deliverImmediately:(BOOL)deliverImmediately;
 @end
 
-#define CPX_VERSION @"0.1.7"
+#define CPX_VERSION @"0.1.8"
 
 #define PREFERENCES_PLIST_PATH @"/var/mobile/Library/Preferences/com.carplayx.preferences.plist"
 #define CPX_NOTIFICATION_PREFS_CHANGED @"com.carplayx.preferences.changed"
