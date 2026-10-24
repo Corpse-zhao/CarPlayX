@@ -1,5 +1,6 @@
 #!/bin/sh
 # CarPlayX 安装/卸载后处理
-# 不自动注销 SpringBoard（避免安装过程被打断 / 多份日志混在一起），由用户手动注销生效
-echo "CarPlayX: 安装完成。请手动注销（Respring）后生效；设置里的 CarPlayX 面板同样需要注销后才会出现。"
+# 不自动注销 SpringBoard（用户手动注销）；尝试刷新桌面图标缓存（新装/卸载的 App 图标）
+echo "板栗仁CarPlay: 安装完成。桌面应出现「板栗仁CarPlay」图标；若没有，请注销一次刷新。"
+uicache -p /Applications/CarPlayX.app >/dev/null 2>&1 || true
 exit 0

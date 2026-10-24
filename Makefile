@@ -15,6 +15,6 @@ after-carplayx-stage::
 	cp postinst_postrm $(THEOS_STAGING_DIR)/DEBIAN/postinst
 	cp postinst_postrm $(THEOS_STAGING_DIR)/DEBIAN/postrm
 
-SUBPROJECTS += prefs
+SUBPROJECTS += app
 
 include $(THEOS_MAKE_PATH)/aggregate.mk
