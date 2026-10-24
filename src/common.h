@@ -60,6 +60,7 @@ static char *kPropertyKey_didDrawPlaceholder;
 /* iOS SDK 头文件完全没有 NSDistributedNotificationCenter 的声明，需整体自声明
    （deliverImmediately: 变体只存在于 macOS 头文件，运行时实际可用） */
 @interface NSDistributedNotificationCenter : NSNotificationCenter
++ (instancetype)defaultCenter;
 @end
 @interface NSDistributedNotificationCenter (CPXDeliver)
 - (void)postNotificationName:(NSString *)name object:(id)obj userInfo:(NSDictionary *)userInfo deliverImmediately:(BOOL)deliverImmediately;
