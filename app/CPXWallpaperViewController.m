@@ -120,6 +120,7 @@
     NSString *dir = CPX_WALLPAPER_DIR;
 
     __block void (^loadType)(int);
+    __weak void (^weakLoadType)(int) = nil;
     NSArray *types = @[@"public.png", @"public.jpeg", @"public.heic", @"public.image"];
     loadType = ^(int idx) {
         if (idx >= (int)types.count)
@@ -152,12 +153,13 @@
                 }
                 else
                 {
-                    loadType(idx + 1);
+                    void (^strongLoadType)(int) = weakLoadType;
+                    strongLoadType(idx + 1);
                 }
             });
         }];
     };
-
+    weakLoadType = loadType;
     loadType(0);
 }
 
