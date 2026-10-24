@@ -1,4 +1,5 @@
 #import "CPXWallpaperViewController.h"
+#import "CPXPrefsCommon.h"
 
 @implementation CPXWallpaperViewController
 

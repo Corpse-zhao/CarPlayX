@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import "CPXPrefsCommon.h"
 #import "CPXAppListViewController.h"
 #import "CPXWallpaperViewController.h"
 

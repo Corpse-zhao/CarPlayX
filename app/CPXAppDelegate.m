@@ -14,7 +14,7 @@
     nav.navigationBar.prefersLargeTitles = YES;
 
     window.rootViewController = nav;
-    window.backgroundColor = [UIColor systemBackground];
+    window.backgroundColor = [UIColor whiteColor];
     self.window = window;
     [window makeKeyAndVisible];
     return YES;

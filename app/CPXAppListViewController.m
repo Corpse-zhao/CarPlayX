@@ -1,4 +1,5 @@
 #import "CPXAppListViewController.h"
+#import "CPXPrefsCommon.h"
 
 #define CPX_APPLIST_PATH @"/var/mobile/Documents/CarPlayX/applist.plist"
 
